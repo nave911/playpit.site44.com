@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <title>Tokyo Subway</title>
+    <script type="text/javascript" src="js/d3.min.js"></script>
+    <style type='text/css'><!--
+body{
+  margin: 0;
+  padding: 0;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none; 
+  -khtml-user-select: none; 
+  -moz-user-select: none; 
+  -ms-user-select: none;
+  user-select: none;
+}
+div.tooltip{
+  position: absolute;
+  text-align: center;
+  width: 172px;
+  height: 28px;
+  padding: 2px;
+  font: 12px sans-serif;
+  background: #EEE;
+  border: 0px;
+  border-radius: 8px;
+  pointer-events: none;
+}
+  --></style>
+  <!-- // for my children ! -->
+  </head>
+  <body>
+    <script type="text/javascript" src="tokyo_subway.csv.json"></script>
+    <script type="text/javascript">
+      ts_db.findNextStation = function(s){
+        var filtered = this.filter(function(ss){
+          var a = [s, ss].map(function(o){return o.Alphabet;});
+          var n = [s, ss].map(function(o){return parseInt(o.Number, 10);});
+          if ((a[0] == 'm') && (n[0] == 5) && (a[1] == 'M') && (n[1] == 6)){
+            return true;// for Marunouchi SubLine
+          }else{
+            return ((a[0] == a[1]) && ((n[0]+1) == n[1]));
+          }
+        });
+        if (filtered[0]){
+          return filtered[0];
+        }else{
+          return s; // no next station
+        }
+      };
+      ts_db.isSameLine = function(d){
+        return function(s){
+          return (s.Alphabet.toUpperCase() == d.Alphabet.toUpperCase());
+        };
+      };
+      
+      d3.selection.prototype.moveToFront = function(){
+        return this.each(function(){
+          this.parentNode.appendChild(this);
+        });
+      };
+      d3.selection.prototype.moveToBack = function(){
+        return this.each(function(){
+          var firstChild = this.parentNode.firstChild;
+          if (firstChild){
+            this.parentNode.insertBefore(this, firstChild);
+          }
+        });
+      };
+
+      var window_w = window.innerWidth - 30;
+      var window_h = window.innerHeight - 30;
+      var window_m = 60;
+      var line_w = d3.max([d3.min([window_w, window_h])/200, 3]);
+      var circle_r = d3.max([d3.min([window_w, window_h])/100, 6]);
+      var opacity_back = 0.2;
+      var opacity_front = 0.7;
+
+      var svg = d3.select("body")
+        .append("svg")
+        .attr("width", window_w)
+        .attr("height", window_h);
+
+      var scaleX = d3.scale.linear()
+        .domain([d3.min(ts_db, function(d){return d.lon}), d3.max(ts_db, function(d){return d.lon})])
+        .range([window_m, window_w - window_m ]);
+      var scaleY = d3.scale.linear()
+        .domain([d3.max(ts_db, function(d){return d.lat}), d3.min(ts_db, function(d){return d.lat})])
+        .range([window_m , window_h - window_m]);
+
+      function ToolTip(){
+        this.div = d3.select("body").append("div")   
+          .attr("class", "tooltip")         
+          .style("opacity", 0);
+        this.off = function(){
+          this.div.transition()
+            .duration(200)
+            .style("opacity", 0);
+        };
+        this.on  = function(d){
+          var h = "<span style='color:#" + d.line_color_c + "'>" + d.Alphabet + d.Number + " </span>"
+          h = h + d.station_name + "<br/>";
+          h = h + d.station_name_k;
+          this.div.html(h)
+            .style("left", (d3.event.pageX - 80) + "px")
+            .style("top", (d3.event.pageY - 40) + "px")
+            .transition()
+            .duration(200)
+            .style("opacity", .9);
+        };
+      };
+      var tt = new ToolTip();
+
+/*    var labels = svg.selectAll("text")
+        .data(ts_db)
+        .enter()
+        .append("text")
+        .attr("x", function(d){ return scaleX(d.lon);})
+        .attr("y", function(d){ return scaleY(d.lat) + 4;})
+        .attr("font-family", "sans-serif")
+        .attr("font-size", "10px")
+        .attr("text-anchor", "middle")
+        .text(function(d){ return d.Alphabet;});*/
+
+      var lines = svg.selectAll("line")
+        .data(ts_db)
+        .enter()
+        .append("line")
+        .attr("opacity", opacity_back)
+        .attr("x1", function(d){
+          return scaleX(d.lon);
+        })
+        .attr("y1", function(d){
+          return scaleY(d.lat);
+        })
+        .attr("x2", function(d){
+          return scaleX(ts_db.findNextStation(d).lon);
+        })
+        .attr("y2", function(d){
+          return scaleY(ts_db.findNextStation(d).lat);
+        })
+        .attr("stroke-width", line_w)
+        .attr("style", function(d){
+          return "stroke:" + d.line_color_c
+        })
+        .on("mousedown", function(d){
+          tt.off();
+          selectLine(d);
+        });
+
+      var circles = svg.selectAll("circle")
+        .data(ts_db)
+        .enter()
+        .append("circle")
+        .attr("opacity", opacity_back)
+        .attr("cx", function(d){
+          return scaleX(d.lon);
+        })
+        .attr("cy", function(d){
+          return scaleY(d.lat);
+        })
+        .attr("r", circle_r)
+        .attr("stroke-width", 0)
+        .attr("style", function(d){
+          return "fill:" + d.line_color_c
+        })
+        .on("mousedown", function(d){
+          selectLine(d);
+          tt.on(d);
+        })
+        .on("mouseover", function(d){
+          tt.on(d);
+        });
+
+      function selectLine(d){
+        [lines, circles].map(function(o){
+          o.attr("opacity", opacity_back);
+          o.filter(ts_db.isSameLine(d))
+            .moveToFront()
+            .attr("opacity", opacity_front);
+        });
+      };
+    </script>
+  </body>
+</html>

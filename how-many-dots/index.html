@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>How many dots?</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+    <style>
+      body {
+        font-family: Monospace;
+        background-color: #000;
+        margin: 0px;
+        overflow: hidden;
+      }
+      .dot {
+        width: 40px;
+        height: 40px;
+        background-color: rgba(0, 127, 127, .3);
+        border: 2px solid rgba(127, 255, 255, 1);
+        cursor: default;
+        /* border-radius: 25px; */
+      }
+      .panel {
+        width: 120px;
+        height: 120px;
+        box-shadow: 0px 0px 20px rgba(0, 255, 255, .5);
+        border: 1px solid rgba(127, 255, 255, .5);
+        cursor: default;
+      }
+        .panel .number {
+          position: absolute;
+          top: 15px;
+          width: 100%;
+          font-size: 80px;
+          text-align: center;
+          color: rgba(238, 255, 255, 1);
+          font-weight: bold;
+        }
+      .panel:hover {
+        box-shadow: 0px 0px 20px rgba(0, 255, 255, .75);
+        border: 1px solid rgba(127, 255, 255, .75);
+      }
+      .p-normal{
+        background-color: rgba(0, 127, 127, .5);
+      }
+      .p-hit{
+        background-color: rgba(255, 255, 255, .5);
+      }
+      .p-miss{
+        background-color: rgba(255, 0, 0, .5);
+      }
+    </style>
+  </head>
+  <body>
+    <script src="js/three.min.js"></script>
+    <script src="js/stats.min.js"></script>
+    <script src="js/CSS3DRenderer.js"></script>
+    <script>
+      var container, stats;
+      var camera, scene, renderer;
+      var dots, numbers, particle;
+      var lastclicked = null, deltaSpeed = 0.005; deltaHard = 1.1;
+      var dotsNmin = 3, dotsNmax = 10, dotsN = dotsNmin;
+      var mode_fps = false;
+
+      var wiw = window.innerWidth, wih = window.innerHeight;
+      var wiwh = wiw/2, wihh = wih/2;
+
+      var getvars = getUrlVars();
+
+      if(getvars["delta"]){deltaSpeed = parseFloat(getvars["delta"]);}
+      if(getvars["hard"]){deltaHard = parseFloat(getvars["hard"]);}
+      if(getvars["fps"]){mode_fps = true;}
+
+      init();
+      animate();
+      initGame();
+
+      function getUrlVars(){
+        var vars = [], hash;
+        var hashes = window.location.href.slice(window.location.href.indexOf('?') + 1).split('&');
+        for(var i = 0; i < hashes.length; i++){
+          hash = hashes[i].split('=');
+          vars.push(hash[0]);
+          vars[hash[0]] = hash[1];
+        }
+        return vars;
+      }
+
+      function init() {
+        container = document.createElement( 'div' );
+        document.body.appendChild( container );
+
+        camera = new THREE.PerspectiveCamera( 75, wiw / wih, 1, 5*wiw );
+        camera.position.z = wiw/2.5;
+
+        scene = new THREE.Scene();
+
+        dots = new THREE.Object3D();
+        scene.add( dots );
+
+        numbers = [];
+        createNumbers(dotsNmin, dotsNmax);
+
+        renderer = new THREE.CSS3DRenderer();
+        renderer.setSize( wiw, wih );
+        renderer.domElement.style.position = 'absolute';
+
+        stats = new Stats();
+        stats.domElement.style.position = 'absolute';
+        stats.domElement.style.top = '0px';
+        if (mode_fps){container.appendChild( stats.domElement );}
+
+        window.addEventListener( 'resize', onWindowResize, false );
+      }
+
+      function initGame(){
+        clearDots();
+        dotsN = Math.floor((Math.random() * (dotsNmax - dotsNmin + 1)) + dotsNmin);
+        createDots(dotsN);
+        container.appendChild( renderer.domElement );
+      }
+
+      function clearDots(){
+        while(dots.children.length!=0){dots.remove(dots.children[dots.children.length-1]);}
+        var ds = document.getElementsByClassName('dot');
+        for(var i=ds.length; 0<i; i--){ds[i-1].parentNode.removeChild(ds[i-1]);}
+      }
+
+      function createDots(n){
+        for ( var i = 0; i < n; i++ ) {
+          var element = document.createElement( 'div' );
+          element.className = 'dot';
+//          advance: randomize dot's color
+//          element.style.backgroundColor = "rgba(" + (Math.random()*64|0 + 192) + ", " + (Math.random()*64|0 + 192) + ", " + (Math.random()*64|0 + 192) + ", 0.3)";
+          var object = new THREE.CSS3DObject( element );
+          object.position.x = Math.random() * wihh - wihh/2;
+          object.position.y = Math.random() * wihh - wihh/2;
+          object.position.z = -wihh/2;
+          scene.add( object );
+          dots.add( object );
+        }
+        if(0.0001 < deltaSpeed){dots.rotation.x = 1.9;}
+      }
+
+      function createNumbers(min, max){
+        var n = max - min + 1;
+        for ( var i = min; i < max+1; i ++ ) {
+          var element = document.createElement( 'div' );
+          element.className = 'panel p-normal';
+
+          var number = document.createElement( 'div' );
+          number.className = 'number';
+          number.textContent = i;
+          element.appendChild( number );
+
+          var object = new THREE.CSS3DObject( element );
+          object.position.x = (Math.round((i-min)/n)-0.5)*wiwh*1.4;
+          object.position.y = (i-min)%(n/2)*-wihh/2.5+wihh*.7;
+          object.position.z = 0;
+          scene.add( object );
+          numbers.push( object );
+
+          element.addEventListener( 'click', onClickNumber, false);
+          element.addEventListener( 'touchend', onClickNumber, false);
+        }
+      }
+
+      function clearColorLastClicked(){
+        if(lastclicked){lastclicked.className = "panel p-normal";}
+      }
+
+      function onClickNumber(event){
+        clearColorLastClicked();
+        lastclicked = this;
+        var changeColor = function(s){
+          lastclicked.className = "panel p-"+s;
+          window.setTimeout(clearColorLastClicked, 500);
+        }
+        if(dotsN == parseInt(this.children[0].innerHTML,10)){
+          changeColor("hit");
+          deltaSpeed *= deltaHard;
+          initGame();
+        }else{
+          changeColor("miss");
+          deltaSpeed *= 1.0/deltaHard;
+        }
+      }
+
+      function onWindowResize() {
+        wiw = window.innerWidth;
+        wih = window.innerHeight;
+        wiwh = wiw/2;
+        wihh = wih/2;
+
+        camera.aspect = wiw / wih;
+        camera.updateProjectionMatrix();
+
+        renderer.setSize( wiw, wih );
+      }
+
+      function animate() {
+        requestAnimationFrame( animate );
+        render();
+        if (mode_fps){stats.update();}
+      }
+
+      function render() {
+        dots.rotation.x += deltaSpeed;
+        renderer.render( scene, camera );
+      }
+    </script>
+  </body>
+</html>
